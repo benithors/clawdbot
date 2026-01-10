@@ -12,6 +12,7 @@ export function buildAgentSystemPrompt(params: {
   ownerNumbers?: string[];
   reasoningTagHint?: boolean;
   toolNames?: string[];
+  toolSummaries?: Record<string, string>;
   modelAliasLines?: string[];
   userTimezone?: string;
   userTime?: string;
@@ -36,7 +37,7 @@ export function buildAgentSystemPrompt(params: {
     browserNoVncUrl?: string;
   };
 }) {
-  const toolSummaries: Record<string, string> = {
+  const coreToolSummaries: Record<string, string> = {
     read: "Read file contents",
     write: "Create or overwrite files",
     edit: "Make precise edits to files",
@@ -46,7 +47,6 @@ export function buildAgentSystemPrompt(params: {
     bash: "Run shell commands",
     process: "Manage background bash sessions",
     // Provider docking: add provider login tools here when a provider needs interactive linking.
-    whatsapp_login: "Generate and wait for WhatsApp QR login",
     browser: "Control web browser",
     canvas: "Present/eval/snapshot the Canvas",
     nodes: "List/describe/notify/camera/screen on paired nodes",
@@ -73,7 +73,6 @@ export function buildAgentSystemPrompt(params: {
     "ls",
     "bash",
     "process",
-    "whatsapp_login",
     "browser",
     "canvas",
     "nodes",
@@ -102,17 +101,27 @@ export function buildAgentSystemPrompt(params: {
 
   const normalizedTools = canonicalToolNames.map((tool) => tool.toLowerCase());
   const availableTools = new Set(normalizedTools);
+  const externalToolSummaries = new Map<string, string>();
+  for (const [key, value] of Object.entries(params.toolSummaries ?? {})) {
+    const normalized = key.trim().toLowerCase();
+    if (!normalized || !value?.trim()) continue;
+    externalToolSummaries.set(normalized, value.trim());
+  }
   const extraTools = Array.from(
     new Set(normalizedTools.filter((tool) => !toolOrder.includes(tool))),
   );
   const enabledTools = toolOrder.filter((tool) => availableTools.has(tool));
   const toolLines = enabledTools.map((tool) => {
-    const summary = toolSummaries[tool];
+    const summary =
+      coreToolSummaries[tool] ?? externalToolSummaries.get(tool);
     const name = resolveToolName(tool);
     return summary ? `- ${name}: ${summary}` : `- ${name}`;
   });
   for (const tool of extraTools.sort()) {
-    toolLines.push(`- ${resolveToolName(tool)}`);
+    const summary =
+      coreToolSummaries[tool] ?? externalToolSummaries.get(tool);
+    const name = resolveToolName(tool);
+    toolLines.push(summary ? `- ${name}: ${summary}` : `- ${name}`);
   }
 
   const hasGateway = availableTools.has("gateway");
@@ -180,7 +189,6 @@ export function buildAgentSystemPrompt(params: {
           "- ls: list directory contents",
           `- ${bashToolName}: run shell commands (supports background via yieldMs/background)`,
           `- ${processToolName}: manage background bash sessions`,
-          "- whatsapp_login: generate a WhatsApp QR code and wait for linking",
           "- browser: control clawd's dedicated browser",
           "- canvas: present/eval/snapshot the Canvas",
           "- nodes: list/describe/notify/camera/screen on paired nodes",
