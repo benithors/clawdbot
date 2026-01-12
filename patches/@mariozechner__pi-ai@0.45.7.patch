@@ -83,7 +83,7 @@ diff --git a/dist/providers/google-shared.js b/dist/providers/google-shared.js
 index 47dc045..706157a 100644
 --- a/dist/providers/google-shared.js
 +++ b/dist/providers/google-shared.js
-@@ -130,18 +130,30 @@
+@@ -130,18 +130,38 @@
                      }
                  }
                  else if (block.type === "toolCall") {
@@ -106,25 +106,62 @@ index 47dc045..706157a 100644
 +                        parts.push({
 +                            text: `[Tool Call: ${block.name}]\nArguments: ${argsStr}`,
 +                        });
-+                    }
+                     }
+-                    parts.push(part);
 +                    else {
++                        const shouldStripFunctionId = typeof model.provider === "string" &&
++                            model.provider.startsWith("google") &&
++                            typeof model.id === "string" &&
++                            model.id.startsWith("gemini");
 +                        const part = {
 +                            functionCall: {
 +                                name: block.name,
 +                                args: block.arguments,
-+                                ...(requiresToolCallId(model.id) ? { id: block.id } : {}),
++                                ...(block.id ? { id: block.id } : {}),
 +                            },
 +                        };
++                        if (shouldStripFunctionId && part?.functionCall?.id) {
++                            delete part.functionCall.id;
++                        }
 +                        if (thoughtSignature) {
 +                            part.thoughtSignature = thoughtSignature;
 +                        }
 +                        parts.push(part);
-                     }
--                    parts.push(part);
++                    }
                  }
              }
              if (parts.length === 0)
-@@ -280,4 +292,4 @@
+@@ -172,16 +192,21 @@
+             const responseValue = hasText ? sanitizeSurrogates(textResult) : hasImages ? "(see attached image)" : "";
+             const imageParts = imageContent.map((imageBlock) => ({
+                 inlineData: {
+                     mimeType: imageBlock.mimeType,
+                     data: imageBlock.data,
+                 },
+             }));
+-            const includeId = requiresToolCallId(model.id);
+             const functionResponsePart = {
+                 functionResponse: {
+                     name: msg.toolName,
+                     response: msg.isError ? { error: responseValue } : { output: responseValue },
+                     // Nest images inside functionResponse.parts for Gemini 3
+                     ...(hasImages && supportsMultimodalFunctionResponse && { parts: imageParts }),
+-                    ...(includeId ? { id: msg.toolCallId } : {}),
++                    ...(msg.toolCallId ? { id: msg.toolCallId } : {}),
+                 },
+             };
++            const shouldStripFunctionId = typeof model.provider === "string" &&
++                model.provider.startsWith("google") &&
++                typeof model.id === "string" &&
++                model.id.startsWith("gemini");
++            if (shouldStripFunctionId && functionResponsePart.functionResponse?.id) {
++                delete functionResponsePart.functionResponse.id;
++            }
+             // Cloud Code Assist API requires all function responses to be in a single user turn.
+             // Check if the last content is already a user turn with function responses and merge.
+             const lastContent = contents[contents.length - 1];
+             if (lastContent?.role === "user" && lastContent.parts?.some((p) => p.functionResponse)) {
+@@ -280,4 +305,4 @@
              return "error";
      }
  }
