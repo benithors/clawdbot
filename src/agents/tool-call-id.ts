@@ -48,6 +48,7 @@ function makeUniqueToolId(params: { id: string; used: Set<string> }): string {
 function rewriteAssistantToolCallIds(params: {
   message: Extract<AgentMessage, { role: "assistant" }>;
   resolve: (id: string) => string;
+  assignMissing: (name?: string) => string;
 }): Extract<AgentMessage, { role: "assistant" }> {
   const content = params.message.content;
   if (!Array.isArray(content)) return params.message;
@@ -60,13 +61,21 @@ function rewriteAssistantToolCallIds(params: {
     const id = rec.id;
     if (
       (type !== "functionCall" && type !== "toolUse" && type !== "toolCall") ||
-      typeof id !== "string" ||
-      !id
+      (typeof id !== "string" && id !== undefined && id !== null)
     ) {
       return block;
     }
-    const nextId = params.resolve(id);
-    if (nextId === id) return block;
+    if (typeof id === "string" && id) {
+      const nextId = params.resolve(id);
+      if (nextId === id) return block;
+      changed = true;
+      return { ...(block as unknown as Record<string, unknown>), id: nextId };
+    }
+    const name =
+      typeof (block as { name?: unknown }).name === "string"
+        ? (block as { name: string }).name
+        : undefined;
+    const nextId = params.assignMissing(name);
     changed = true;
     return { ...(block as unknown as Record<string, unknown>), id: nextId };
   });
@@ -106,12 +115,23 @@ export function sanitizeToolCallIdsForCloudCodeAssist(messages: AgentMessage[]):
   // Fix by applying a stable, transcript-wide mapping and de-duping via suffix.
   const map = new Map<string, string>();
   const used = new Set<string>();
+  let missingIndex = 0;
 
   const resolve = (id: string) => {
     const existing = map.get(id);
     if (existing) return existing;
     const next = makeUniqueToolId({ id, used });
     map.set(id, next);
+    used.add(next);
+    return next;
+  };
+  const assignMissing = (name?: string) => {
+    missingIndex += 1;
+    const base =
+      typeof name === "string" && name.trim().length > 0
+        ? `${name.trim()}_${missingIndex}`
+        : `tool_${missingIndex}`;
+    const next = makeUniqueToolId({ id: base, used });
     used.add(next);
     return next;
   };
@@ -124,6 +144,7 @@ export function sanitizeToolCallIdsForCloudCodeAssist(messages: AgentMessage[]):
       const next = rewriteAssistantToolCallIds({
         message: msg as Extract<AgentMessage, { role: "assistant" }>,
         resolve,
+        assignMissing,
       });
       if (next !== msg) changed = true;
       return next;
