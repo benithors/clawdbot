@@ -67,4 +67,22 @@ describe("sanitizeToolCallIdsForCloudCodeAssist", () => {
     expect(r1.toolCallId).toBe(a.id);
     expect(r2.toolCallId).toBe(b.id);
   });
+
+  it("fills missing tool call ids", () => {
+    const input = [
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", name: "read", arguments: {} }],
+      },
+    ] satisfies AgentMessage[];
+
+    const out = sanitizeToolCallIdsForCloudCodeAssist(input);
+    expect(out).not.toBe(input);
+
+    const assistant = out[0] as Extract<AgentMessage, { role: "assistant" }>;
+    const call = assistant.content?.[0] as { id?: string };
+    expect(typeof call.id).toBe("string");
+    expect(call.id?.length).toBeGreaterThan(0);
+    expect(isValidCloudCodeAssistToolId(call.id as string)).toBe(true);
+  });
 });
