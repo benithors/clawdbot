@@ -197,6 +197,47 @@ describe("google-shared convertMessages", () => {
     });
   });
 
+  it("downgrades thinking blocks without signatures to text", () => {
+    const model = makeModel("gemini-1.5-pro");
+    const context = {
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "thinking",
+              thinking: "hidden",
+            },
+          ],
+          api: "google-generative-ai",
+          provider: "google",
+          model: "gemini-1.5-pro",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: 0,
+        },
+      ],
+    } as unknown as Context;
+
+    const contents = convertMessages(model, context);
+    const part = contents?.[0]?.parts?.[0];
+    expect(part).toMatchObject({ text: "hidden" });
+    expect("thought" in (part ?? {})).toBe(false);
+  });
+
   it("keeps thought signatures for Claude models", () => {
     const model = makeModel("claude-3-opus");
     const context = {
