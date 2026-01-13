@@ -83,7 +83,37 @@ diff --git a/dist/providers/google-shared.js b/dist/providers/google-shared.js
 index 47dc045..706157a 100644
 --- a/dist/providers/google-shared.js
 +++ b/dist/providers/google-shared.js
-@@ -130,18 +130,38 @@
+@@ -63,6 +63,10 @@ export function convertMessages(model, context) {
+     const contents = [];
+     const transformedMessages = transformMessages(context.messages, model);
++    const shouldStripFunctionId = typeof model.provider === "string" &&
++        model.provider.startsWith("google") &&
++        typeof model.id === "string" &&
++        model.id.startsWith("gemini");
+     for (const msg of transformedMessages) {
+         if (msg.role === "user") {
+             if (typeof msg.content === "string") {
+@@ -113,14 +117,15 @@ export function convertMessages(model, context) {
+                     // Skip empty thinking blocks
+                     if (!block.thinking || block.thinking.trim() === "")
+                         continue;
+-                    // Only keep as thinking block if same provider AND same model
++                    // Only keep as thinking block if same provider AND same model,
++                    // and we have a valid thinking signature for replay.
+                     // Otherwise convert to plain text (no tags to avoid model mimicking them)
+-                    if (isSameProviderAndModel) {
+-                        const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.thinkingSignature);
++                    const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.thinkingSignature);
++                    if (isSameProviderAndModel && thoughtSignature) {
+                         parts.push({
+                             thought: true,
+                             text: sanitizeSurrogates(block.thinking),
+-                            ...(thoughtSignature && { thoughtSignature }),
++                            thoughtSignature,
+                         });
+                     }
+                     else {
+@@ -130,18 +131,38 @@
                      }
                  }
                  else if (block.type === "toolCall") {
@@ -109,10 +139,6 @@ index 47dc045..706157a 100644
                      }
 -                    parts.push(part);
 +                    else {
-+                        const shouldStripFunctionId = typeof model.provider === "string" &&
-+                            model.provider.startsWith("google") &&
-+                            typeof model.id === "string" &&
-+                            model.id.startsWith("gemini");
 +                        const part = {
 +                            functionCall: {
 +                                name: block.name,
@@ -131,7 +157,7 @@ index 47dc045..706157a 100644
                  }
              }
              if (parts.length === 0)
-@@ -172,16 +192,21 @@
+@@ -172,16 +192,20 @@
              const responseValue = hasText ? sanitizeSurrogates(textResult) : hasImages ? "(see attached image)" : "";
              const imageParts = imageContent.map((imageBlock) => ({
                  inlineData: {
@@ -150,10 +176,6 @@ index 47dc045..706157a 100644
 +                    ...(msg.toolCallId ? { id: msg.toolCallId } : {}),
                  },
              };
-+            const shouldStripFunctionId = typeof model.provider === "string" &&
-+                model.provider.startsWith("google") &&
-+                typeof model.id === "string" &&
-+                model.id.startsWith("gemini");
 +            if (shouldStripFunctionId && functionResponsePart.functionResponse?.id) {
 +                delete functionResponsePart.functionResponse.id;
 +            }
@@ -161,7 +183,7 @@ index 47dc045..706157a 100644
              // Check if the last content is already a user turn with function responses and merge.
              const lastContent = contents[contents.length - 1];
              if (lastContent?.role === "user" && lastContent.parts?.some((p) => p.functionResponse)) {
-@@ -280,4 +305,4 @@
+@@ -280,4 +304,4 @@
              return "error";
      }
  }
