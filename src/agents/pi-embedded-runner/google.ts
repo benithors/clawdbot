@@ -152,6 +152,7 @@ export function applyGoogleTurnOrderingFix(params: {
 export async function sanitizeSessionHistory(params: {
   messages: AgentMessage[];
   modelApi?: string | null;
+  modelId?: string | null;
   sessionManager: SessionManager;
   sessionId: string;
 }): Promise<AgentMessage[]> {
@@ -164,7 +165,11 @@ export async function sanitizeSessionHistory(params: {
   const downgradedThinking = isGoogleModelApi(params.modelApi)
     ? downgradeGeminiThinkingBlocks(repairedTools)
     : repairedTools;
-  const downgraded = isGoogleModelApi(params.modelApi)
+  const shouldDowngradeGeminiHistory =
+    isGoogleModelApi(params.modelApi) &&
+    typeof params.modelId === "string" &&
+    params.modelId.startsWith("gemini");
+  const downgraded = shouldDowngradeGeminiHistory
     ? downgradeGeminiHistory(downgradedThinking)
     : downgradedThinking;
 
