@@ -575,6 +575,7 @@ export function applyGoogleTurnOrderingFix(params: {
 async function sanitizeSessionHistory(params: {
   messages: AgentMessage[];
   modelApi?: string | null;
+  modelId?: string | null;
   sessionManager: SessionManager;
   sessionId: string;
 }): Promise<AgentMessage[]> {
@@ -588,8 +589,12 @@ async function sanitizeSessionHistory(params: {
   );
   const repairedTools = sanitizeToolUseResultPairing(sanitizedImages);
 
-  // Downgrade tool calls missing thought_signature if using Gemini
-  const downgraded = isGoogleModelApi(params.modelApi)
+  // Downgrade tool calls missing thought_signature only for Gemini models.
+  const shouldDowngradeGeminiHistory =
+    isGoogleModelApi(params.modelApi) &&
+    typeof params.modelId === "string" &&
+    params.modelId.startsWith("gemini");
+  const downgraded = shouldDowngradeGeminiHistory
     ? downgradeGeminiHistory(repairedTools)
     : repairedTools;
 
@@ -1396,6 +1401,7 @@ export async function compactEmbeddedPiSession(params: {
             const prior = await sanitizeSessionHistory({
               messages: session.messages,
               modelApi: model.api,
+              modelId: model.id,
               sessionManager,
               sessionId: params.sessionId,
             });
@@ -1829,6 +1835,7 @@ export async function runEmbeddedPiAgent(params: {
             const prior = await sanitizeSessionHistory({
               messages: session.messages,
               modelApi: model.api,
+              modelId: model.id,
               sessionManager,
               sessionId: params.sessionId,
             });
